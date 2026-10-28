@@ -1,0 +1,22 @@
+{
+  "project_root": "/path/to/project",
+  "input_directory": "Inputs_from_AF",
+  "include_folder_patterns": [
+    "*_2xtfap4_2xre_seed[1-5]",
+    "*_2xtfap4_76_dronv2_2xre_seed[1-5]",
+    "*_2xtfap4_80_dronv2_2xre_seed[1-5]",
+    "*_2xtfap4_136_dronv2_2xre_seed[1-5]"
+  ],
+  "output_directory": "results",
+  "insertion_length": 257,
+  "core_end": 179,
+  "insertion_sites": [
+    76,
+    80,
+    136
+  ],
+  "expected_seeds_per_condition": 5,
+  "expected_models_per_seed": 5,
+  "matchmaker_cutoff_angstrom": 2.0,
+  "reference_model_id": null
+}

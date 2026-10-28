@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+.local/
+Inputs_from_AF/
+results/
+handoff/
+*.zip
+*.out
