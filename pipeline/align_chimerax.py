@@ -58,7 +58,7 @@ def match_exact_core(session, reference, model, site, end, length, cutoff):
     moving = {c.chain_id: c for c in model.chains}
     results = match(session, "ss", [(refs[c], moving[c]) for c in "AB"],
                     "BLOSUM-62", "nw", 12, 1, align=align_core,
-                    cutoff_distance=cutoff, ss_fraction=0, compute_ss=False,
+                    cutoff_distance=cutoff, ss_fraction=0.0, compute_ss=False,
                     show_alignment=False, always_raise_errors=True, log_parameters=False)
     if len(results) != 1:
         raise RuntimeError("MatchMaker did not produce exactly one joint dimer fit")
@@ -279,3 +279,4 @@ if "session" in globals():  # ChimeraX executes in a named sandbox, not __main__
         traceback.print_exc()
         # Nonzero exit is necessary for Slurm; completion marker also checked by wrapper.
         raise SystemExit(1)
+
