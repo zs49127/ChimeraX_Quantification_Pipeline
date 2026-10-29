@@ -106,3 +106,27 @@ All outputs go under the configured project root and output directory:
 - `chimerax_stdout.log`, `chimerax_log.html`, `matchmaker_commands.txt`: runtime diagnostics and API-call descriptions with runtime model IDs; not a standalone reload script.
 
 Read [METHODS.md](METHODS.md) before interpreting the plots. SD describes predicted-model spread, not experimental uncertainty or evidence of functional effects.
+
+## Combined 3D residue plot
+
+After alignment completes, run `python pipeline/plot_residue_3d.py /path/to/results`.
+This standalone script reads the existing `per_residue.csv`, manifest and alignment
+completion marker; no alignment rerun is needed. It creates a new `figures_3d/`
+directory containing PNG, PDF and an underlying summary CSV. Use `--output-dir`
+to choose another new destination on subsequent runs. Existing results are not changed.
+
+Axes are native TFAP4 residue (X), mean Cα pLDDT (Y), and mean Cα deviation in Å (Z).
+Each condition has a separate trajectory; A and B have separate panels with common
+axis ranges. Points represent residue-level means across poses, with the reference
+self-comparison excluded. Lines connect consecutive residues, not spatial contacts.
+These are the same measurements as the original 2D profiles, not a new alignment.
+
+For a rotatable, offline HTML version, install the optional Plotly dependency with
+`python -m pip install 'plotly>=5.18,<7'` in your plotting environment, then append
+`--html` to the command. Alternatively install `requirements-3d.txt` in a dedicated
+environment. The HTML includes hover statistics, legend toggles and a mean ± SD
+button. SD bars are marginal pose variation on each axis, not confidence intervals
+or joint uncertainty regions, and are clipped to physically possible bounds.
+Mean trajectories alone cannot establish an individual-model correlation between
+confidence and displacement. The two original 2D profiles remain useful alongside
+the 3D view because perspective can obscure overlap.
