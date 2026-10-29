@@ -52,8 +52,21 @@ def summarize_residues(folder):
     return summary, end, ref
 
 
+def focused_ranges(summary, include_sd=False):
+    """Shared A/B limits with 5% padding; retain all plotted values."""
+    ranges = []
+    for mean, sd, lower, upper in (("plddt_mean", "plddt_sd", 0, 100),
+                                    ("deviation_mean", "deviation_sd", 0, None)):
+        spread = summary[sd].fillna(0) if include_sd else 0
+        lo = float((summary[mean] - spread).min())
+        hi = float((summary[mean] + spread).max())
+        pad = max((hi - lo) * 0.05, 0.5 if upper else 0.05)
+        ranges.append([max(lower, lo - pad), min(upper, hi + pad) if upper else hi + pad])
+    return ranges
+
+
 def draw_static(summary, end, destination):
-    zmax = max(1.0, float(summary.deviation_mean.max()) * 1.1)
+    yrange, zrange = focused_ranges(summary)
     fig = plt.figure(figsize=(15, 7.5), facecolor="white")
     for panel, chain in enumerate("AB", 1):
         ax = fig.add_subplot(1, 2, panel, projection="3d")
@@ -61,9 +74,7 @@ def draw_static(summary, end, destination):
             sub = summary[(summary.chain == chain) & (summary.condition == condition)].sort_values("tfap4_residue")
             ax.plot(sub.tfap4_residue, sub.plddt_mean, sub.deviation_mean, color=color,
                     linewidth=1.5, alpha=0.85)
-            # Every point represents one native TFAP4 residue, not a new replicate.
-            ax.scatter(sub.tfap4_residue, sub.plddt_mean, sub.deviation_mean, color=color, s=7, alpha=0.75)
-        ax.set(xlim=(1, end), ylim=(0, 100), zlim=(0, zmax), title=f"Chain {chain}")
+        ax.set(xlim=(1, end), ylim=yrange, zlim=zrange, title=f"Chain {chain}")
         ax.set_xlabel("Native TFAP4 residue", labelpad=10)
         ax.set_ylabel("Mean Cα pLDDT", labelpad=10)
         ax.set_zlabel("Mean Cα deviation (Å)", labelpad=12)
@@ -75,8 +86,8 @@ def draw_static(summary, end, destination):
     fig.suptitle("TFAP4 residue confidence and structural deviation", fontsize=17, y=0.98)
     handles = [Line2D([0], [0], color=c, lw=2, label=l) for l, c in zip(ORDER, COLORS)]
     fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.92), ncol=4, frameon=False)
-    fig.text(0.5, 0.04, "Each point: a residue’s pose-mean pLDDT and deviation. Lines follow sequence order.\n"
-             "Reference self-comparison excluded; variation is available in the CSV and interactive HTML.",
+    fig.text(0.5, 0.04, "Lines connect residue-level pose means in sequence order; no smoothing.\n"
+             "Axes zoom to data ranges (shared across chains); reference self-comparison excluded.",
              ha="center", fontsize=10, color="#444444")
     fig.subplots_adjust(left=0.02, right=0.94, top=0.85, bottom=0.14, wspace=0.08)
     fig.savefig(destination / "residue_confidence_deviation_3d.png", dpi=220)
@@ -87,7 +98,8 @@ def draw_static(summary, end, destination):
 def draw_html(summary, end, destination):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    zmax = max(1.0, float((summary.deviation_mean + summary.deviation_sd.fillna(0)).max()) * 1.1)
+    yrange, zrange = focused_ranges(summary)
+    ysd, zsd = focused_ranges(summary, include_sd=True)
     fig = make_subplots(rows=1, cols=2, specs=[[{"type": "scene"}, {"type": "scene"}]],
                         subplot_titles=["Chain A", "Chain B"])
     for col, chain in enumerate("AB", 1):
@@ -96,8 +108,8 @@ def draw_html(summary, end, destination):
             ps, ds = sub.plddt_sd.fillna(0), sub.deviation_sd.fillna(0)
             fig.add_trace(go.Scatter3d(
                 x=sub.tfap4_residue, y=sub.plddt_mean, z=sub.deviation_mean,
-                mode="lines+markers", name=condition, legendgroup=condition, showlegend=col == 1,
-                line=dict(color=color, width=4), marker=dict(color=color, size=3),
+                mode="lines", name=condition, legendgroup=condition, showlegend=col == 1,
+                line=dict(color=color, width=4),
                 customdata=np.column_stack([ps, ds, sub.n_models]),
                 error_y=dict(type="data", array=np.minimum(ps, 100 - sub.plddt_mean),
                              arrayminus=np.minimum(ps, sub.plddt_mean), symmetric=False, visible=False),
@@ -108,16 +120,20 @@ def draw_html(summary, end, destination):
                                "<br>Mean deviation: %{z:.2f} ± %{customdata[1]:.2f} Å SD"
                                "<br>Models: %{customdata[2]:.0f}<extra></extra>")), row=1, col=col)
     scene = dict(xaxis=dict(title="Native TFAP4 residue", range=[1, end]),
-                 yaxis=dict(title="Mean Cα pLDDT", range=[0, 100]),
-                 zaxis=dict(title="Mean Cα deviation (Å)", range=[0, zmax]),
+                 yaxis=dict(title="Mean Cα pLDDT", range=yrange),
+                 zaxis=dict(title="Mean Cα deviation (Å)", range=zrange),
                  aspectmode="manual", aspectratio=dict(x=1.5, y=1, z=1))
     fig.update_layout(template="plotly_white", height=780, scene=scene, scene2=scene,
                       title="TFAP4 residue confidence and structural deviation",
                       legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center", groupclick="togglegroup"),
                       margin=dict(t=150, b=110, l=15, r=15),
                       updatemenus=[dict(type="buttons", direction="right", x=0, y=1.03, buttons=[
-                          dict(label="Mean only", method="restyle", args=[{"error_y.visible": False, "error_z.visible": False}]),
-                          dict(label="Mean ± SD", method="restyle", args=[{"error_y.visible": True, "error_z.visible": True}])])])
+                          dict(label="Mean only", method="update", args=[{"error_y.visible": False, "error_z.visible": False},
+                               {"scene.yaxis.range": yrange, "scene.zaxis.range": zrange,
+                                "scene2.yaxis.range": yrange, "scene2.zaxis.range": zrange}]),
+                          dict(label="Mean ± SD", method="update", args=[{"error_y.visible": True, "error_z.visible": True},
+                               {"scene.yaxis.range": ysd, "scene.zaxis.range": zsd,
+                                "scene2.yaxis.range": ysd, "scene2.zaxis.range": zsd}])])])
     fig.add_annotation(text="Drag to rotate · Hover for residue statistics · Click legend to hide/show a condition<br>"
                        "SD describes pose variation, not uncertainty of the mean; bars clipped to physical bounds.<br>"
                        "Mean trajectories do not show individual-model correlations. Reference self-comparison excluded.",
@@ -154,3 +170,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
