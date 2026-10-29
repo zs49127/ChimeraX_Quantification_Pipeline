@@ -60,6 +60,8 @@ class CoreRegressionTests(unittest.TestCase):
             self.assertEqual(pairing, "ss")
             self.assertEqual([(r.chain_id, m.chain_id) for r, m in pairs], [("A", "A"), ("B", "B")])
             self.assertEqual(kwargs["cutoff_distance"], 2.0)
+            self.assertIs(type(kwargs["ss_fraction"]), float)
+            self.assertEqual(kwargs["ss_fraction"], 0.0)
             ra, ma = [], []
             for r, m in pairs:
                 _, rs, ms = kwargs["align"](session, r, m, matrix, alg, gap_open, gap_extend, {})
@@ -89,3 +91,4 @@ class CoreRegressionTests(unittest.TestCase):
         model.chains[0].residues[393] = None
         with self.assertRaisesRegex(ValueError, "394"):
             compact_core(model.chains[0], 136, 179, 257)
+
