@@ -15,6 +15,63 @@ def atom_key(a):
     return a.residue.chain_id, a.residue.number, a.name
 
 
+def compact_core(chain, site, end, length):
+    """Return actual residues and letters without excluded sequence placeholders."""
+    by_number = {r.number: (r, letter) for r, letter in zip(chain.residues, chain.characters)
+                 if r is not None}
+    selected = []
+    for number in range(1, end + 1):
+        mapped = construct_number(number, site, length)
+        if mapped not in by_number:
+            raise ValueError(f"Missing core residue /{chain.chain_id}:{mapped}")
+        selected.append(by_number[mapped])
+    return [r for r, _ in selected], "".join(letter for _, letter in selected)
+
+
+def match_exact_core(session, reference, model, site, end, length, cutoff):
+    """MatchMaker fit with compact core sequences, retaining original atom objects.
+
+    The command's residue restriction leaves excluded positions as '?' in the
+    sequence alignment. A long cassette can then displace the post-insertion
+    segment. Supply compact 179-letter StructureSeq objects to the same NW
+    alignment and MatchMaker fitting engine instead. No coordinates, chain IDs,
+    residue numbers, or full-model sequences are edited.
+    """
+    from chimerax.atomic import StructureSeq
+    from chimerax.match_maker.match import match, align as align_sequences
+
+    def align_core(session, ref_chain, moving_chain, *args, **kwargs):
+        rr, rc = compact_core(ref_chain, 0, end, length)
+        mr, mc = compact_core(moving_chain, site, end, length)
+        if rc != mc:
+            raise ValueError(f"Core sequence mismatch in chain {moving_chain.chain_id}")
+        compact = []
+        for chain, residues, chars in ((ref_chain, rr, rc), (moving_chain, mr, mc)):
+            seq = StructureSeq(structure=chain.structure, chain_id=chain.chain_id,
+                               polymer_type=chain.polymer_type)
+            seq.name = chain.structure.name + " core " + chain.chain_id
+            seq.bulk_set(residues, chars)
+            compact.append(seq)
+        return align_sequences(session, compact[0], compact[1], *args, **kwargs)
+
+    refs = {c.chain_id: c for c in reference.chains}
+    moving = {c.chain_id: c for c in model.chains}
+    results = match(session, "ss", [(refs[c], moving[c]) for c in "AB"],
+                    "BLOSUM-62", "nw", 12, 1, align=align_core,
+                    cutoff_distance=cutoff, ss_fraction=0, compute_ss=False,
+                    show_alignment=False, always_raise_errors=True, log_parameters=False)
+    if len(results) != 1:
+        raise RuntimeError("MatchMaker did not produce exactly one joint dimer fit")
+    result = results[0]
+    actual = [(atom_key(a), atom_key(b)) for a, b in
+              zip(result["full match atoms"], result["full ref atoms"])]
+    expected = [((c, construct_number(r, site, length), "CA"), (c, r, "CA"))
+                for c in "AB" for r in range(1, end + 1)]
+    if len(actual) != len(expected) or set(actual) != set(expected):
+        raise RuntimeError(f"MatchMaker correspondence differs from exact {2 * end}-site TFAP4 map")
+    return result
+
+
 def index_atoms(model):
     atoms = {}
     for atom in model.atoms:
@@ -131,25 +188,21 @@ def execute(session, manifest_path):
         for key in mapped_keys:
             if key not in atoms:
                 raise ValueError(f"Missing core CA: {key}")
-        command = (f"mmaker #{model.id_string}/A,B:{core_spec(site, end, length)} "
-                   f"to #{reference.id_string}/A,B:1-{end} pairing ss "
-                   f"alg nw matrix BLOSUM-62 ssFraction 0 "
-                   f"cutoffDistance {cfg['matchmaker_cutoff_angstrom']} showAlignment false")
-        commands.append(f"# {entry['model_id']}\n{command}")
-        result = run(session, command)
-        if not isinstance(result, list) or len(result) != 1:
-            raise RuntimeError("MatchMaker did not produce exactly one joint dimer fit")
-        match = result[0]
-        actual = {(atom_key(a), atom_key(b)) for a, b in zip(match["full match atoms"], match["full ref atoms"])}
-        expected = set(zip(mapped_keys, ca_keys))
-        if actual != expected:
-            raise RuntimeError("MatchMaker correspondence differs from exact 358-site TFAP4 map; refusing metrics")
+        description = (f"# {entry['model_id']}\n"
+                       f"MatchMaker Python API; compact core sequences; pairing ss; "
+                       f"moving #{model.id_string}/A,B:{core_spec(site, end, length)}; "
+                       f"reference #{reference.id_string}/A,B:1-{end}; "
+                       f"cutoff {cfg['matchmaker_cutoff_angstrom']} A")
+        commands.append(description)
+        match = match_exact_core(session, reference, model, site, end, length,
+                                 cfg['matchmaker_cutoff_angstrom'])
         used = {atom_key(a) for a in match["final match atoms"]}
         coords = np.array([atoms[k].scene_coord for k in mapped_keys])
         measures, deviations, local = summarize(coords, ref_ca)
         row = dict(model_id=entry["model_id"], condition=entry["condition"], site=site,
                    seed=entry["seed"], rank=entry["rank"],
                    is_reference=entry["model_id"] == ref_entry["model_id"],
+                   alignment_method="matchmaker_compact_core_v2", mm_full_ca=len(match["full match atoms"]),
                    mm_pruned_rmsd=float(match["final RMSD"]),
                    mm_full_rmsd=float(match["full RMSD"]), mm_retained_ca=len(used),
                    mm_retained_fraction=len(used) / len(ca_keys), **measures)

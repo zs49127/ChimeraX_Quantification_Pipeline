@@ -65,13 +65,15 @@ All controls are processed before mutant models. Each is aligned independently t
 | Insertion at Residue 80 | 1–80, 338–436 |
 | Insertion at Residue 136 | 1–136, 394–436 |
 
-Example command, with model IDs assigned at runtime:
+The original command-style selection was:
 
 ```text
 mmaker #2/A,B:1-76,334-436 to #1/A,B:1-179 pairing ss alg nw matrix BLOSUM-62 ssFraction 0 cutoffDistance 2.0 showAlignment false
 ```
 
-`pairing ss` fits A→A and B→B in one rigid-body transformation. Default MatchMaker `pairing bb` would select a single best chain pair. Sequence-only scoring (`ssFraction 0`) is intentional because the homologous core sequence is identical: predicted secondary-structure changes must not change residue correspondence. MatchMaker's entire pre-pruning atom correspondence must equal the exact 358-site numbering map or the run stops. The cassette, tail after native residue 179, and DNA do not influence the fit. The complete complex moves with that fit.
+**The production pipeline now uses the MatchMaker Python API with compact core sequences instead of this command.** ChimeraX's command restriction retains excluded sequence positions as placeholders; in a residue-136 insertion this produced only 272 pairs. The new alignment callback constructs two 179-letter core sequences referencing the original residues, then uses MatchMaker's Needleman–Wunsch alignment and iterative fit. Coordinates, numbering and full-model sequences are unchanged. All 358 pairs are still required before pruning. `alignment_method=matchmaker_compact_core_v2` and `mm_full_ca` identify the corrected results.
+
+`pairing ss` fits A→A and B→B in one rigid-body transformation. Default MatchMaker `pairing bb` would select a single best chain pair. Sequence-only scoring (`ssFraction 0`) is intentional because the homologous core sequence is identical: predicted secondary-structure changes must not change residue correspondence. The cassette, tail after native residue 179, and DNA do not influence the fit. The complete complex moves with that fit.
 
 ## Runtime setup (after handoff)
 
@@ -101,6 +103,6 @@ All outputs go under the configured project root and output directory:
 - `confidence_regions.csv`, `confidence_region_summary.csv`: directional PAE and contact probabilities between chain-specific core, cassette, tail and DNA regions.
 - `aligned/*.cif`: all complexes in the reference coordinate frame; `transforms.json` stores 3×4 scene transformations.
 - `figures/`: nine figure types exported as PNG and PDF; plot labels use “Insertion at Residue 76”, etc., with line breaks on compact axes.
-- `chimerax_stdout.log`, `chimerax_log.html`, `matchmaker_commands.txt`: runtime diagnostics and exact commands. Commands document runtime model IDs and are not a standalone reload script.
+- `chimerax_stdout.log`, `chimerax_log.html`, `matchmaker_commands.txt`: runtime diagnostics and API-call descriptions with runtime model IDs; not a standalone reload script.
 
 Read [METHODS.md](METHODS.md) before interpreting the plots. SD describes predicted-model spread, not experimental uncertainty or evidence of functional effects.

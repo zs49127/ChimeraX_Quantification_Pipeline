@@ -8,6 +8,8 @@ Each insertion has 25 poses nested within five stochastic seeds. These seeds are
 
 ## Alignment and deviation
 
+The corrected implementation supplies compact core `StructureSeq` objects to MatchMaker's sequence-alignment callback. These objects reference the original residues and omit cassette/tail placeholders entirely. MatchMaker still performs sequence-only Needleman–Wunsch alignment and its iterative rigid-body fitting. This prevents the command restriction's long excluded region from displacing the post-insertion core correspondence. The original 358-pair check remains mandatory, and the method is recorded as `matchmaker_compact_core_v2` in every model row. Older partial results should not be combined with the corrected run; use a fresh output directory and the same frozen reference.
+
 MatchMaker's joint A/B fit uses the 179 native N-terminal TFAP4 residues from each chain. Residues after native 179 and both 257-aa cassettes are excluded. The correspondence is validated exactly before any numerical reporting. The 2 Å iterative cutoff can retain a small well-matched subset; therefore pruned RMSD is always accompanied by retained atom counts/fraction and an all-core RMSD evaluated under **the same final transform**, including discarded atoms. Per-chain retained counts reveal if one chain dominates the final fit.
 
 For displacement vectors Δi = xi − yi after this fit:

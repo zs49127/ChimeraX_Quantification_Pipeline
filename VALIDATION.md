@@ -1,5 +1,9 @@
 # Validation record
 
+## Compact-core correction (2026-10-29)
+
+The cluster log revealed that the first residue-136 model yielded 272 pre-pruning pairs. The corrected callback removes excluded sequence placeholders before sequence alignment while retaining original residue objects. Four regression tests cover all insertion sites, joint-chain API wiring, rejection of the original 272-pair failure, and missing post-insertion residues. These use test doubles for ChimeraX objects; they do not claim a local ChimeraX integration run. The corrected numerical fit must be verified on Longleaf. Rerun into a new directory with the prior manifest's reference ID; keep the original results untouched.
+
 Validated locally on 2026-10-28:
 
 - Five unit tests pass: all insertion boundaries; exact sequence/cassette validation; rigid-transform invariance and reflection rejection; distortion sensitivity; a complete 100-model manifest and missing-input/overwrite rejection.
