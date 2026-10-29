@@ -4,6 +4,9 @@ __pycache__/
 .local/
 Inputs_from_AF/
 results/
+results_*/
 handoff/
+*.local.md
+config*.local.json
 *.zip
 *.out
